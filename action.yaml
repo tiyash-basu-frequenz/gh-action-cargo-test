@@ -66,9 +66,6 @@ runs:
 
     # Run the linter.
     # -D warnings: enable all warnings
-    # -W clippy::unwrap_used: enable the unwrap_used lint, which warns on using unwrap
-    # -W clippy::expect_used: enable the expect_used lint, which warns on using expect
-    # -W clippy::panic: enable the panic lint, which warns on using panic
     - name: Run clippy
       env:
         CLIPPY_PARAMETERS: ${{ inputs.cargo-clippy-extra-parameters }}
