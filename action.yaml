@@ -1,0 +1,96 @@
+name: "cargo-test"
+description: "Runs the format checker, linter, and tests with coverage."
+
+inputs:
+  enable-coverage:
+    description: "Whether to enable generating a test coverage report or not. If yes, uses `cargo-llvm-cov` for generating the report."
+    required: false
+    default: "true"
+
+  enable-build-cache:
+    description: "Whether to enable caching the build artifacts or not. If yes, caches the build using a hash generated from the `Cargo.lock` file if it exists, otherwise uses the `Cargo.toml` file."
+    required: false
+    default: "true"
+
+  cargo-clippy-extra-parameters:
+    description: "Additional parameters to append to the `cargo clippy` call."
+    required: false
+    default: "-W clippy::unwrap_used -W clippy::expect_used -W clippy::panic"
+
+  cargo-test-parameters:
+    "description": "Parameters to append to the `cargo test` command."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+
+  steps:
+    # Cache test-dependencies to speed up installing them.
+    - name: Cache dependencies
+      id: cache-bin
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin
+        key: ${{ runner.os }}-cargo-test-dependencies
+
+    # Print Cargo and Rust versions.
+    - name: Rust version
+      run: |
+        rustc --version
+        cargo --version
+      shell: bash
+
+    # If coverage is enabled, install cargo-llvm-cov.
+    - name: Install dependencies for coverage
+      if: inputs.enable-coverage == 'true' && steps.cache-bin.outputs.cache-hit != 'true'
+      run: cargo install --force cargo-llvm-cov
+      shell: bash
+
+    # Cache the test-build to speed up the build process.
+    # Use the `Cargo.lock` file to generate a unique key for the cache.
+    # If the `Cargo.lock` file does not exist, use the `Cargo.toml` file.
+    - name: Cache build
+      uses: actions/cache@v4
+      if: inputs.enable-build-cache == 'true'
+      with:
+        path: |
+          ~/.cargo/registry
+          target
+        key: ${{ runner.os }}-cargo-build-test-${{ hashFiles('**/Cargo.lock') || hashFiles('**/Cargo.toml') }}
+
+    # Run the format checker.
+    - name: Run format check
+      run: cargo fmt -- --check
+      shell: bash
+
+    # Run the linter.
+    # -D warnings: enable all warnings
+    # -W clippy::unwrap_used: enable the unwrap_used lint, which warns on using unwrap
+    # -W clippy::expect_used: enable the expect_used lint, which warns on using expect
+    # -W clippy::panic: enable the panic lint, which warns on using panic
+    - name: Run clippy
+      env:
+        CLIPPY_PARAMETERS: ${{ inputs.cargo-clippy-extra-parameters }}
+      run: |
+        cargo clippy --no-deps -- \
+          -D warnings \
+          $CLIPPY_PARAMETERS
+      shell: bash
+
+    # Run the tests.
+    # If coverage is enabled, use cargo-llvm-cov to generate a coverage report.
+    # The coverage report will be saved in the target directory.
+    #
+    # Read more about coverage in cargo here:
+    # - https://doc.rust-lang.org/rustc/instrument-coverage.html#test-coverage
+    # - https://lib.rs/crates/cargo-llvm-cov
+    - name: Run tests
+      env:
+        ENABLE_COV: ${{ inputs.enable-coverage }}
+        TEST_PARAMETERS: ${{ inputs.cargo-test-parameters }}
+      run: |
+        cov=
+        if test "$ENABLE_COV" = "true"; then cov=llvm-cov; fi
+        cargo $cov test $TEST_PARAMETERS
+      shell: bash
