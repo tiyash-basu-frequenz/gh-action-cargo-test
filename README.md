@@ -62,7 +62,7 @@ jobs:
           submodules: recursive
 
       - name: Run tests
-        uses: frequenz-floss/gh-action-cargo-test@v0.x.x
+        uses: frequenz-floss/gh-action-cargo-test@v1
 ```
 
 ## License
